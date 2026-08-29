@@ -104,3 +104,36 @@ func TestUnpackRejectsSizeMismatch(t *testing.T) {
 		t.Fatal("expected size mismatch error")
 	}
 }
+
+func TestPackWithRoundtrip(t *testing.T) {
+	algos := []Algorithm{AlgoNone, AlgoRLE, AlgoHuffman, AlgoLZ77}
+	cases := [][]byte{
+		{},
+		{0},
+		[]byte("abcabcabc AAA hello hello"),
+		bytes.Repeat([]byte{'Z'}, 100),
+	}
+	for _, algo := range algos {
+		for i, in := range cases {
+			blob, err := PackWith(algo, in)
+			if err != nil {
+				t.Fatalf("algo=%d case %d: pack: %v", algo, i, err)
+			}
+			got, h, err := Unpack(blob)
+			if err != nil {
+				t.Fatalf("algo=%d case %d: unpack: %v", algo, i, err)
+			}
+			if h.Algorithm != algo {
+				t.Fatalf("algo=%d case %d: header algo=%d", algo, i, h.Algorithm)
+			}
+			if !bytes.Equal(got, in) {
+				t.Fatalf("algo=%d case %d: roundtrip mismatch", algo, i)
+			}
+		}
+	}
+}
+func TestPackWithUnknown(t *testing.T) {
+	if _, err := PackWith(99, []byte("x")); err == nil {
+		t.Fatal("expected unknown algorithm error")
+	}
+}

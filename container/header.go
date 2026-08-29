@@ -15,8 +15,10 @@ var Magic = [4]byte{'G', 'O', 'A', 'L'}
 type Algorithm uint8
 
 const (
-	AlgoNone Algorithm = 0
-	AlgoRLE  Algorithm = 1
+	AlgoNone    Algorithm = 0
+	AlgoRLE     Algorithm = 1
+	AlgoHuffman Algorithm = 2
+	AlgoLZ77    Algorithm = 3
 )
 
 type Header struct {
