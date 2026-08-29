@@ -17,12 +17,17 @@ func TestPackUnpackRoundtrip(t *testing.T) {
 		{1, 1, 2, 2, 2, 3},
 	}
 	for i, in := range cases {
-		got, h, err := Unpack(Pack(in))
+		store, err := PackWith(AlgoNone, in)
+		if err != nil {
+			t.Fatalf("case %d: store: %v", i, err)
+		}
+		blob := Pack(in)
+		if len(blob) > len(store) {
+			t.Fatalf("case %d: pack larger than store: %d > %d", i, len(blob), len(store))
+		}
+		got, h, err := Unpack(blob)
 		if err != nil {
 			t.Fatalf("case %d: unpack: %v", i, err)
-		}
-		if h.Algorithm != AlgoRLE {
-			t.Fatalf("case %d: algo=%d, want RLE", i, h.Algorithm)
 		}
 		if h.OrigSize != uint64(len(in)) {
 			t.Fatalf("case %d: orig size=%d, want %d", i, h.OrigSize, len(in))
@@ -55,9 +60,6 @@ func TestPackWritesHeader(t *testing.T) {
 	}
 	if blob[4] != Version {
 		t.Fatalf("version=%d", blob[4])
-	}
-	if Algorithm(blob[5]) != AlgoRLE {
-		t.Fatalf("algo=%d", blob[5])
 	}
 	if binary.LittleEndian.Uint64(blob[6:14]) != 3 {
 		t.Fatal("orig size != 3")
@@ -135,5 +137,56 @@ func TestPackWithRoundtrip(t *testing.T) {
 func TestPackWithUnknown(t *testing.T) {
 	if _, err := PackWith(99, []byte("x")); err == nil {
 		t.Fatal("expected unknown algorithm error")
+	}
+}
+
+func TestPackCompressesRuns(t *testing.T) {
+	in := bytes.Repeat([]byte{'Z'}, 100)
+	blob := Pack(in)
+	_, h, err := Unpack(blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Algorithm == AlgoNone {
+		t.Fatal("expected a compressing algorithm for long runs")
+	}
+	store, _ := PackWith(AlgoNone, in)
+	if len(blob) >= len(store) {
+		t.Fatalf("expected shrink vs store: pack=%d store=%d", len(blob), len(store))
+	}
+}
+
+func TestPackStoresIncompressible(t *testing.T) {
+	in := make([]byte, 4096)
+	if _, err := rand.Read(in); err != nil {
+		t.Fatal(err)
+	}
+	blob := Pack(in)
+	_, h, err := Unpack(blob)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.Algorithm != AlgoNone {
+		t.Fatalf("expected AlgoNone for random data, got %d", h.Algorithm)
+	}
+	store, _ := PackWith(AlgoNone, in)
+	if len(blob) != len(store) {
+		t.Fatalf("store size=%d pack=%d", len(store), len(blob))
+	}
+}
+
+func TestPackNeverLargerThanStore(t *testing.T) {
+	cases := [][]byte{
+		{},
+		{1, 2, 3, 4, 5},
+		[]byte("hello hello hello"),
+		bytes.Repeat([]byte{'A'}, 50),
+	}
+	for i, in := range cases {
+		store, _ := PackWith(AlgoNone, in)
+		blob := Pack(in)
+		if len(blob) > len(store) {
+			t.Fatalf("case %d: pack=%d store=%d", i, len(blob), len(store))
+		}
 	}
 }
